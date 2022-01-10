@@ -216,7 +216,7 @@ else:
   inbook = st.sidebar.checkbox("Show only breweries in Craft Notes", value=False)
   limit = st.sidebar.slider("Limit results to", 1, 50, value=5)
 
-  loc_button = st.button("Find a Brewery")
+  # loc_button = st.button("Find a Brewery")
 
   def distance(p1, p2):
     return geopy.distance.distance(p1, p2).miles
@@ -228,7 +228,7 @@ else:
     ctr.write(f"Approximate Distance: {round(brewery[3], 2)} miles")
     return(ctr)
 
-  loc_button = Button(label="Get Location")
+  loc_button = Button(label="Find a Brewery Near Me")
   loc_button.js_on_event("button_click", CustomJS(code="""
       navigator.geolocation.getCurrentPosition(
           (loc) => {
@@ -245,23 +245,25 @@ else:
       debounce_time=0)
 
   if loc_button:
-    me = geocoder.ip('me').latlng
-    me = (me[0], me[1])
+    if "GET_LOCATION" in result:
+      me = result.get("GET_LOCATION")
+      st.write(result.get("GET_LOCATION"))
+      me = (me['lat'], me['lon'])
 
-    all_breweries['distance'] = all_breweries.apply(lambda x: distance(me, (x['lat'], x['lon'])), axis=1)
-    
-    if new_breweries & inbook:
-      all_breweries3 = all_breweries[~all_breweries['visited'] & all_breweries['craftnotes']]
-    elif new_breweries:
-      all_breweries3 = all_breweries[~all_breweries['visited']]
-    elif inbook:
-      all_breweries3 = all_breweries_3[all_breweries_3['craftnotes']]
-    else:
-      all_breweries3 = all_breweries
-    
-    all_breweries3 = all_breweries3.sort_values(by='distance', ascending=True).reset_index(drop=True).head(limit)
+      all_breweries['distance'] = all_breweries.apply(lambda x: distance(me, (x['lat'], x['lon'])), axis=1)
+      
+      if new_breweries & inbook:
+        all_breweries3 = all_breweries[~all_breweries['visited'] & all_breweries['craftnotes']]
+      elif new_breweries:
+        all_breweries3 = all_breweries[~all_breweries['visited']]
+      elif inbook:
+        all_breweries3 = all_breweries_3[all_breweries_3['craftnotes']]
+      else:
+        all_breweries3 = all_breweries
+      
+      all_breweries3 = all_breweries3.sort_values(by='distance', ascending=True).reset_index(drop=True).head(limit)
 
-    for row in all_breweries3[['name', 'address', 'distance']].itertuples():
-      make_card(row)
-      st.write("---")
+      for row in all_breweries3[['name', 'address', 'distance']].itertuples():
+        make_card(row)
+        st.write("---")
 
