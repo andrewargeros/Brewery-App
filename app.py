@@ -257,7 +257,7 @@ else:
       elif new_breweries:
         all_breweries3 = all_breweries[~all_breweries['visited']]
       elif inbook:
-        all_breweries3 = all_breweries_3[all_breweries_3['craftnotes']]
+        all_breweries3 = all_breweries[all_breweries['craftnotes']]
       else:
         all_breweries3 = all_breweries
       
