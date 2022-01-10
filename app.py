@@ -7,6 +7,9 @@ import math
 import geopy.distance
 from fuzzywuzzy import fuzz
 import geocoder
+from bokeh.models.widgets import Button
+from bokeh.models import CustomJS
+from streamlit_bokeh_events import streamlit_bokeh_events
 
 ## Data
 # locations = pd.read_csv(
@@ -210,7 +213,7 @@ else:
   Use the Radio buttons to select the filters you'd like.""")
 
   new_breweries = st.sidebar.checkbox("Show only breweries we haven't visited", value=False)
-  inbook = st.sidebar.checkbox("Show only breweries in CrafNotes", value=False)
+  inbook = st.sidebar.checkbox("Show only breweries in Craft Notes", value=False)
   limit = st.sidebar.slider("Limit results to", 1, 50, value=5)
 
   loc_button = st.button("Find a Brewery")
@@ -224,6 +227,22 @@ else:
     ctr.write(f"*{brewery[2]}*")
     ctr.write(f"Approximate Distance: {round(brewery[3], 2)} miles")
     return(ctr)
+
+  loc_button = Button(label="Get Location")
+  loc_button.js_on_event("button_click", CustomJS(code="""
+      navigator.geolocation.getCurrentPosition(
+          (loc) => {
+              document.dispatchEvent(new CustomEvent("GET_LOCATION", {detail: {lat: loc.coords.latitude, lon: loc.coords.longitude}}))
+          }
+      )
+      """))
+  result = streamlit_bokeh_events(
+      loc_button,
+      events="GET_LOCATION",
+      key="get_location",
+      refresh_on_update=True,
+      override_height=75,
+      debounce_time=0)
 
   if loc_button:
     me = geocoder.ip('me').latlng
