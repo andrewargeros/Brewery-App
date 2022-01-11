@@ -210,7 +210,7 @@ else:
 
   st.header("Find a Place Near Me")
   st.markdown(f"""The search bar below allows you to find a brewery near you. 
-  Use the Radio buttons to select the filters you'd like.""")
+  Use the Radio buttons to select the filters you'd like. Note, to refresh your location, click the button below.""")
 
   new_breweries = st.sidebar.checkbox("Show only breweries we haven't visited", value=False)
   inbook = st.sidebar.checkbox("Show only breweries in Craft Notes", value=False)
@@ -240,14 +240,14 @@ else:
       loc_button,
       events="GET_LOCATION",
       key="get_location",
-      refresh_on_update=True,
+      refresh_on_update=False,
       override_height=75,
       debounce_time=0)
 
   if loc_button:
     if "GET_LOCATION" in result:
       me = result.get("GET_LOCATION")
-      st.write(result.get("GET_LOCATION"))
+      st.write(f'We estimate your location as {result.get("GET_LOCATION")["lat"]}, {result.get("GET_LOCATION")["lon"]}')
       me = (me['lat'], me['lon'])
 
       all_breweries['distance'] = all_breweries.apply(lambda x: distance(me, (x['lat'], x['lon'])), axis=1)
