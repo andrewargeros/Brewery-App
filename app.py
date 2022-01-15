@@ -4,12 +4,17 @@ import numpy as np
 import plotly.express as px
 import plotly.graph_objects as go
 import math
+import re
 import geopy.distance
 from fuzzywuzzy import fuzz
 import geocoder
+import datetime
 from bokeh.models.widgets import Button
 from bokeh.models import CustomJS
 from streamlit_bokeh_events import streamlit_bokeh_events
+from pyzipcode import ZipCodeDatabase
+from geopy.geocoders import Nominatim
+geolocator = Nominatim(user_agent="MNCRAFTBREWINGAPP")
 
 ## Data
 # locations = pd.read_csv(
@@ -57,6 +62,15 @@ all_breweries['lon'], all_breweries['lat'] = zip(
 
 all_breweries['coords'] = all_breweries.apply(lambda x: (x['lat'], x['lon']), axis=1)
 
+
+def get_zipcode(address):
+  try:
+    return re.findall(r'\d{5}$', address)[0]
+  except:
+    return None
+
+all_breweries['zipcode'] = all_breweries['address'].apply(get_zipcode)
+
 def ordinal(b):
   if pd.notnull(b):
     n = int(b)
@@ -103,7 +117,8 @@ with st.container():
   with c3:
     st.metric('Craft Notes %', f"{round(100*all_breweries[all_breweries.visited]['craftnotes'].sum()/67, 2)}%")
 
-  page = st.sidebar.radio('Select a page', ['Map', 'Rankings', 'Search'])
+  page = st.sidebar.radio('Select a page', 
+  ['Map', 'Rankings', 'Find Near Me', 'Find by Zip or City', 'Leave a Review'])
 
 if page == 'Map':
   st.subheader('Map')
@@ -206,7 +221,7 @@ elif page == "Rankings":
 
   st.dataframe(rankings2.head(limit_rank), height=500)
 
-else:
+elif page == 'Find Near Me':
 
   st.header("Find a Place Near Me")
   st.markdown(f"""The search bar below allows you to find a brewery near you. 
@@ -223,7 +238,7 @@ else:
 
   def make_card(brewery):
     ctr = st.container()
-    ctr.header(brewery[1])
+    ctr.subheader(brewery[1])
     ctr.write(f"*{brewery[2]}*")
     ctr.write(f"Approximate Distance: {round(brewery[3], 2)} miles")
     return(ctr)
@@ -266,4 +281,112 @@ else:
       for row in all_breweries3[['name', 'address', 'distance']].itertuples():
         make_card(row)
         st.write("---")
+  else:
+    st.write("We can't find your location. Please enable location services in your browser.")
 
+elif page == 'Find by Zip or City':
+
+  choice = st.sidebar.radio("Search by:", ['Zip Code', 'City'])
+  new_breweries = st.sidebar.checkbox(
+      "Show only breweries we haven't visited", value=False)
+  inbook = st.sidebar.checkbox(
+      "Show only breweries in Craft Notes", value=False)
+  limit = st.sidebar.slider("Limit results to", 1, 50, value=5)
+
+  def distance(p1, p2):
+    return geopy.distance.distance(p1, p2).miles
+
+  def make_card(brewery):
+    ctr = st.container()
+    ctr.subheader(brewery[1])
+    ctr.write(f"*{re.sub(r'[^A-Za-z0-9 ]+', '', brewery[2])}*")
+    ctr.write(f"Approximate Distance: {round(brewery[3], 2)} miles")
+    return(ctr)
+
+  st.header("Find Breweries by {choice}".format(choice=choice))
+
+  if new_breweries & inbook:
+    all_breweries3 = all_breweries[~all_breweries['visited'] & all_breweries['craftnotes']]
+  elif new_breweries:
+    all_breweries3 = all_breweries[~all_breweries['visited']]
+  elif inbook:
+    all_breweries3 = all_breweries[all_breweries['craftnotes']]
+  else:
+    all_breweries3 = all_breweries
+
+  if choice == 'Zip Code':
+    zcdb = ZipCodeDatabase()
+    zip_code = st.sidebar.text_input("Zip Code", value="55101", max_chars=5)
+    place = zcdb.get(zip_code)
+    place = (place.latitude, place.longitude)
+
+  elif choice == 'City':
+    city = st.sidebar.text_input("City", value="St. Paul")
+    city = f'{city}, Minnesota'
+    place = geolocator.geocode(city)
+    place = (place.latitude, place.longitude)
+  
+  if place:
+    all_breweries3['distance'] = all_breweries3.apply(lambda x: distance(place, (x['lat'], x['lon'])), axis=1)
+    all_breweries3 = all_breweries3.sort_values(by='distance', ascending=True).reset_index(drop=True).head(limit)
+
+    for row in all_breweries3[['name', 'address', 'distance']].itertuples():
+      make_card(row)
+      st.write("---")
+  
+elif page == "Leave a Review":
+  st.header("Leave a Review")
+  brewery = st.selectbox("Select a Brewery", all_breweries['name'])
+  date_visited = st.date_input("Date Visited", value=datetime.date.today())
+  taps = st.number_input("Number of Taps", value=1, min_value=1, max_value=100)
+
+  order = st.text_input("What did you order? Enter multiple drinks seperated with commas",
+   value="")
+
+  col1, col2 = st.columns(2)
+
+  with col1:
+    st.subheader("Atmosphere")
+    st.write('''Please rate the atmosphere from 1-10. 
+    This includes the overall aesthetics of the brewery, your experience ordering, 
+    and the overall overall experience.''')
+    atmosphere = st.slider("Atmosphere", 1.0, 10.0, value=5.0, step=0.25)
+  with col2:
+    st.subheader("Glassware")
+    st.write('''Please rate the glassware from 1-10.
+    To us, a brewery with a high glassware of 5 score has multiple options for
+    glasses, fun shapes, and a cool on glass printing/etching.''')
+    glassware = st.slider("Glassware", 1.0, 10.0, value=5.0, step=0.25)
+  with col1:
+    st.subheader("Beer Selection")
+    st.write('''Please rate the selection of beer from 1-10. Selection includes both how
+    many beers you *would have tried* and the *quality of the beer you tried*. Note: Only
+    include beer in this rating-- No Seltzers, Ciders, etc.''')
+    beer = st.slider("Beer Selection", 1.0, 10.0, value=5.0, step=0.25)
+  with col2:
+    st.subheader("Non-Beer Selection")
+    st.write('''Please rate the selection of the seltzers, ciders, cocktails and other beverages from 1-10. 
+    Selection includes both how many drinks you *would have tried* and the *quality of the drink(s) you tried*.
+    Please do not include beer in this rating.''')
+    nonbeer = st.slider("Non-Beer Selection", 1.0, 10.0, value=5.0, step=0.25)
+
+  email = st.text_input("Enter your Email to Submit", value="")
+  if st.button("Submit"):
+    if email:
+      if re.match(r'[^@]+@[^@]+\.[^@]+', email):
+        user_data = {
+          'email': email,
+          'brewery': brewery,
+          'date_visited': date_visited,
+          'taps': taps,
+          'order': order,
+          'atmosphere': atmosphere,
+          'beer': beer,
+          'nonbeer': nonbeer,
+          'glassware': glassware
+        }
+        st.success("Thank you for your review!")
+      else:
+        st.write("Please enter a valid email address.")
+    else:
+      st.write("Please enter an email address.")
